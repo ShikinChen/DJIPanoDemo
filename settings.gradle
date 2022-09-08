@@ -1,0 +1,19 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        google()
+        mavenCentral()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = "DJIPanoDemo"
+include ':app'
+//不能改opencv的模块文件夹名字要保持 sdk 因为 cmake 配置写死 sdk
+include ':opencv_sdk'
+project(':opencv_sdk').projectDir = new File('./sdk')
