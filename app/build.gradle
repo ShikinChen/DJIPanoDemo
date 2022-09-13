@@ -3,6 +3,10 @@ plugins {
     id 'org.jetbrains.kotlin.android'
 }
 
+ext {
+    DJI_API_KEY = "e74d2d7af06de8fc432960c7"
+}
+
 android {
     compileSdk 32
 
@@ -13,14 +17,17 @@ android {
         versionCode 1
         versionName "1.0"
 
+        multiDexEnabled true
+
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         externalNativeBuild {
             cmake {
                 cppFlags '-std=c++11'
             }
         }
-    }
 
+        manifestPlaceholders = [DJI_API_KEY: "$DJI_API_KEY"]
+    }
     buildTypes {
         release {
             minifyEnabled false
@@ -52,6 +59,19 @@ dependencies {
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
 
     implementation project(":opencv_sdk")
+
+    implementation "androidx.lifecycle:lifecycle-runtime-ktx:2.5.1"
+    implementation "androidx.multidex:multidex:2.0.1"
+    implementation('com.dji:dji-uxsdk:4.16.2') {
+        exclude group: 'com.google.android.gms', module: 'play-services-base'
+        exclude group: 'com.amap.api'
+//        exclude group: 'com.dji', module: 'dji-sdk'
+        exclude group: 'com.mapbox.mapboxsdk'
+        exclude group: 'com.mapzen.android'
+    }
+    compileOnly 'com.dji:dji-sdk-provided:4.16.2'
+    implementation 'com.guolindev.permissionx:permissionx:1.6.4'
+    implementation 'com.afollestad.material-dialogs:core:3.3.0'
 
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.3'

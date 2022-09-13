@@ -1,3 +1,11 @@
 <resources>
     <string name="app_name">DJIPanoDemo</string>
+    <string name="start">start</string>
+    <string name="common_message_string">Common message</string>
+    <string name="stitching">Stitching</string>
+    <string name="test">Test</string>
+    <string name="one_key_panorama">One key Panorama</string>
+    <string name="groundstation_take_control">Be cautious!GroundStation take control now</string>
+    <string name="capture_image_complete">Capture complete</string>
+    <string name="capturing_image">Capturing</string>
 </resources>
