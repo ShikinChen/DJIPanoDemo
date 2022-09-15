@@ -29,6 +29,10 @@ android {
         manifestPlaceholders = [DJI_API_KEY: "$DJI_API_KEY"]
     }
     buildTypes {
+        debug {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), rootProject.file('proguard-rules.pro')
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'

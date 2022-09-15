@@ -16,13 +16,16 @@ import dji.common.mission.waypoint.*
 import dji.common.model.LocationCoordinate2D
 import dji.sdk.base.BaseComponent
 import dji.sdk.base.BaseProduct
+import dji.sdk.media.DownloadListener
 import dji.sdk.media.MediaFile
+import dji.sdk.mission.waypoint.WaypointMissionOperatorListener
 import dji.sdk.products.Aircraft
 import dji.sdk.sdkmanager.DJISDKInitEvent
 import dji.sdk.sdkmanager.DJISDKManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.channels.trySendBlocking
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.filter
@@ -33,16 +36,15 @@ import me.shiki.djipanodemo.databinding.DialogDownloadProgressBinding
 import org.opencv.android.InstallCallbackInterface
 import org.opencv.android.LoaderCallbackInterface
 import org.opencv.android.OpenCVLoader
+import java.io.File
+import java.util.concurrent.BlockingDeque
+import java.util.concurrent.LinkedBlockingDeque
 
-class MainActivity : AppCompatActivity(), DJISDKManager.SDKManagerCallback {
+class MainActivity : AppCompatActivity(), DJISDKManager.SDKManagerCallback, WaypointMissionOperatorListener {
 
     companion object {
         private const val TAG = "DJI_PANO_DEMO"
         private const val CAPTURE_IMAGE_NUMBER = 8
-
-        init {
-            System.loadLibrary("djipanodemo")
-        }
     }
 
 
@@ -50,10 +52,10 @@ class MainActivity : AppCompatActivity(), DJISDKManager.SDKManagerCallback {
     private lateinit var dialogDownloadProgressBinding: DialogDownloadProgressBinding
     private var downloadProgressDialog: MaterialDialog? = null
     private val stitchingSourceImagesDirectory by lazy {
-        getExternalFilesDir(null)
+        getExternalFilesDir(null)!!
     }
     private val stitchingResultImagesDirectory by lazy {
-        getExternalFilesDir("result")
+        getExternalFilesDir("result")!!
     }
 
     private val djiSDKManager by lazy {
@@ -87,8 +89,12 @@ class MainActivity : AppCompatActivity(), DJISDKManager.SDKManagerCallback {
     private var aircraftLat = 0.0
     private var aircraftLng = 0.0
 
-    private val imgList by lazy {
+    private val mediaFileList by lazy {
         mutableListOf<MediaFile>()
+    }
+
+    private val imgList by lazy {
+        LinkedBlockingDeque<String>()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -100,6 +106,8 @@ class MainActivity : AppCompatActivity(), DJISDKManager.SDKManagerCallback {
         setContentView(binding.root)
         initUIControls()
         initDJISDK()
+
+        Log.d(TAG, "OpenCVVersion:${OpenCVUtils.openCVVersion()}")
     }
 
     private fun initDJICamera() {
@@ -107,9 +115,8 @@ class MainActivity : AppCompatActivity(), DJISDKManager.SDKManagerCallback {
             it.setMediaFileCallback { mediaFile ->
                 when (mediaFile.mediaType) {
                     MediaFile.MediaType.JPEG -> {
-                        imgList.add(mediaFile)
-                    }
-                    MediaFile.MediaType.MOV, MediaFile.MediaType.MP4 -> {
+                        Log.d(TAG, "${mediaFile.fileName}")
+                        mediaFileList.add(mediaFile)
                     }
                     else -> {}
                 }
@@ -200,20 +207,19 @@ class MainActivity : AppCompatActivity(), DJISDKManager.SDKManagerCallback {
 
     private fun initAircraftMission() {
         lifecycleScope.launch(Dispatchers.IO) {
-            imgList.clear()
+            mediaFileList.clear()
             showCommonMessage(getString(R.string.groundstation_take_control))
             val altitude = 50f
             val offset = 0.000005
             val waypoint1 = createWaypoint(aircraftLat + offset, aircraftLng, altitude)
             waypoint1.addAction(WaypointAction(WaypointActionType.ROTATE_AIRCRAFT, 0))
 
-            val waypoint2 = createWaypoint(aircraftLat, aircraftLng, altitude)
-            addRotateAircraftAction(waypoint2, 0, 180)
-            addRotateAircraftAction(waypoint2, -180, 0)
-
             val builder = WaypointMission.Builder()
-            builder.addWaypoint(waypoint1)
-            builder.addWaypoint(waypoint2)
+//            builder.addWaypoint(waypoint1)
+//            val waypoint2 = createWaypoint(aircraftLat, aircraftLng, altitude)
+            addRotateAircraftAction(builder, -180, 180)
+
+//            builder.addWaypoint(waypoint2)
 
             builder.autoFlightSpeed(10f).maxFlightSpeed(10f)
                 .flightPathMode(WaypointMissionFlightPathMode.NORMAL)
@@ -295,11 +301,27 @@ class MainActivity : AppCompatActivity(), DJISDKManager.SDKManagerCallback {
         return waypoint
     }
 
-    private fun addRotateAircraftAction(waypoint: Waypoint, start: Int, end: Int) {
-        for (i in start until end step 360 / CAPTURE_IMAGE_NUMBER) {
+    private fun addRotateAircraftAction(builder: WaypointMission.Builder, start: Int, end: Int, alt: Float = 50f) {
+        val offset = 0.0000045
+        for (i in start until end step 45) {
+            var waypoint = createWaypoint(aircraftLat, aircraftLng, alt)
             waypoint.addAction(WaypointAction(WaypointActionType.ROTATE_AIRCRAFT, i))
+            for (j in -45..0 step 30) {
+                waypoint.addAction(WaypointAction(WaypointActionType.GIMBAL_PITCH, j))
+                waypoint.addAction(WaypointAction(WaypointActionType.START_TAKE_PHOTO, 1))
+            }
+            waypoint.addAction(WaypointAction(WaypointActionType.GIMBAL_PITCH, 0))
             waypoint.addAction(WaypointAction(WaypointActionType.START_TAKE_PHOTO, 1))
+
+            if (i == 0 || i == -180) {
+                waypoint.addAction(WaypointAction(WaypointActionType.GIMBAL_PITCH, -75))
+                waypoint.addAction(WaypointAction(WaypointActionType.START_TAKE_PHOTO, 1))
+            }
+            builder.addWaypoint(waypoint)
+            waypoint = createWaypoint(aircraftLat + offset, aircraftLng, alt)
+            builder.addWaypoint(waypoint)
         }
+//        waypoint.addAction(WaypointAction(WaypointActionType.GIMBAL_PITCH, 0))
     }
 
     private fun showCommonMessage(msg: String) {
@@ -329,29 +351,10 @@ class MainActivity : AppCompatActivity(), DJISDKManager.SDKManagerCallback {
         downloadProgressDialog = MaterialDialog(this).show {
             customView(view = dialogDownloadProgressBinding.root)
             cancelable(false)
+        }.show {
+
         }
     }
-
-    private fun initOpenCVLoader() {
-        if (!OpenCVLoader.initDebug()) {
-            Log.d(TAG, "init buildin OpenCVLoader error,going to use OpenCV Manager")
-            OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION, application, object : LoaderCallbackInterface {
-                override fun onManagerConnected(status: Int) {
-                    when (status) {
-                        LoaderCallbackInterface.SUCCESS -> {
-                            Log.d(TAG, "OpenCV Manager loaded successfully")
-                        }
-                        else -> {
-                        }
-                    }
-                }
-
-                override fun onPackageInstall(operation: Int, callback: InstallCallbackInterface?) {
-                }
-            })
-        }
-    }
-
 
     override fun onRegister(error: DJIError?) {
         Log.d(TAG, "onRegister")
@@ -377,6 +380,7 @@ class MainActivity : AppCompatActivity(), DJISDKManager.SDKManagerCallback {
             }
             initDJICamera()
             initFlightController()
+            waypointMissionOperator.addListener(this)
         }
     }
 
@@ -400,5 +404,75 @@ class MainActivity : AppCompatActivity(), DJISDKManager.SDKManagerCallback {
         Log.d(TAG, "onDatabaseDownloadProgress")
     }
 
-    private external fun opencvVersion(): String
+    override fun onDownloadUpdate(event: WaypointMissionDownloadEvent) {
+    }
+
+    override fun onUploadUpdate(event: WaypointMissionUploadEvent) {
+    }
+
+    override fun onExecutionUpdate(event: WaypointMissionExecutionEvent) {
+    }
+
+    override fun onExecutionStart() {
+    }
+
+    override fun onExecutionFinish(err: DJIError?) {
+        downloadImg()
+    }
+
+    private fun downloadImg() {
+        if (mediaFileList.isNotEmpty()) {
+            lifecycleScope.launch(Dispatchers.Main) {
+                dialogDownloadProgressBinding.text.text =
+                    "0/${mediaFileList.size}"
+                showDownloadProgressDialog()
+            }
+            val dir = File(stitchingSourceImagesDirectory, System.currentTimeMillis().toString())
+            for (mediaFile in mediaFileList) {
+                val fileName = mediaFile.fileName.substring(0, mediaFile.fileName.lastIndexOf("."))
+                mediaFile.fetchFileData(
+                    dir,
+                    fileName,
+                    object : DownloadListener<String> {
+                        override fun onStart() {
+                        }
+
+                        override fun onRateUpdate(p0: Long, p1: Long, p2: Long) {
+                        }
+
+                        override fun onRealtimeDataUpdate(p0: ByteArray?, p1: Long, p2: Boolean) {
+                        }
+
+                        override fun onProgress(total: Long, current: Long) {
+                        }
+
+                        override fun onSuccess(path: String?) {
+                            Log.d(TAG, "$path/${mediaFile.fileName}")
+                            if (!path.isNullOrEmpty()) {
+                                imgList.add(path)
+                                val progress = imgList.size * 100 / mediaFileList.size.toFloat()
+                                lifecycleScope.launch(Dispatchers.Main) {
+                                    dialogDownloadProgressBinding.progressBar.progress = progress.toInt()
+                                    dialogDownloadProgressBinding.text.text =
+                                        "${imgList.size}/${mediaFileList.size}"
+                                    delay(1000)
+                                    if (progress >= 100f) {
+                                        downloadProgressDialog?.dismiss()
+                                    }
+                                }
+                            }
+                        }
+
+                        override fun onFailure(err: DJIError?) {
+                        }
+
+                    })
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        waypointMissionOperator.removeListener(this)
+        super.onDestroy()
+    }
 }

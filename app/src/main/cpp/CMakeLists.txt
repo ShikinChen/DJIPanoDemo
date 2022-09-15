@@ -7,7 +7,7 @@ cmake_minimum_required(VERSION 3.6)
 
 # Declares and names the project.
 
-project("djipanodemo")
+project("opencv_utils")
 
 # Creates and names a library, sets it as either STATIC
 # or SHARED, and provides the relative paths to its source code.
@@ -18,7 +18,7 @@ file(GLOB SRCS *.cpp *.c)
 file(GLOB HDRS *.hpp *.h)
 
 add_library( # Sets the name of the library.
-        djipanodemo
+        opencv_utils
 
         # Sets the library as a shared library.
         SHARED
@@ -45,9 +45,10 @@ find_library( # Sets the name of the path variable.
 # build script, prebuilt third-party libraries, or system libraries.
 
 target_link_libraries( # Specifies the target library.
-        djipanodemo
+        opencv_utils
 
         # Links the target library to the log library
         # included in the NDK.
         ${log-lib}
+        ${opencv_stitching}
         opencv_java)
